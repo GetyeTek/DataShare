@@ -105,7 +105,7 @@
             key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2bGRmc214c2toZW1rc2xzYnltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2ODgxNzksImV4cCI6MjA3ODI2NDE3OX0.5arqrx8Tt7v-hpXpo_ncoK4IX8th9IibxAuv93SSoOU'
         };
         
-        let supabase;
+        let db;
         let ROOM_SLUG = '';
         let localClips = [];
 
@@ -133,13 +133,13 @@
         }
 
         function initSupabase() {
-            supabase = supabase.createClient(AUTH.url, AUTH.key);
+            db = supabase.createClient(AUTH.url, AUTH.key);
             
             // 1. Initial Load
             fetchClips();
 
             // 2. Realtime Listener
-            supabase.channel('public:clips')
+            db.channel('public:clips')
                 .on('postgres_changes', 
                     { event: '*', schema: 'public', table: 'clips', filter: `slug=eq.${ROOM_SLUG}` }, 
                     (payload) => {
@@ -154,7 +154,7 @@
 
         // --- LOGIC ---
         async function fetchClips() {
-            const { data, error } = await supabase
+            const { data, error } = await db
                 .from('clips')
                 .select('content')
                 .eq('slug', ROOM_SLUG)
@@ -162,7 +162,7 @@
 
             if (error && error.code === 'PGRST116') {
                 // No row exists yet, create it
-                await supabase.from('clips').insert([{ slug: ROOM_SLUG, content: '[]' }]);
+                await db.from('clips').insert([{ slug: ROOM_SLUG, content: '[]' }]);
                 localClips = [];
             } else if (data) {
                 parseAndRender(data.content);
@@ -203,7 +203,7 @@
             if (localClips.length > 50) localClips = localClips.slice(0, 50);
 
             // Push to DB
-            const { error } = await supabase
+            const { error } = await db
                 .from('clips')
                 .update({ content: JSON.stringify(localClips) })
                 .eq('slug', ROOM_SLUG);
@@ -224,7 +224,7 @@
             if(!confirm('Delete all history?')) return;
             localClips = [];
             renderHistory();
-            await supabase.from('clips').update({ content: '[]' }).eq('slug', ROOM_SLUG);
+            await db.from('clips').update({ content: '[]' }).eq('slug', ROOM_SLUG);
             showToast('History Cleared');
         }
 
