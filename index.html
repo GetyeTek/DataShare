@@ -100,41 +100,53 @@
     <script>
         // --- CONFIG ---
         const AUTH = {
-            pass: '98891998',
             url: 'https://xvldfsmxskhemkslsbym.supabase.co',
             key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2bGRmc214c2toZW1rc2xzYnltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2ODgxNzksImV4cCI6MjA3ODI2NDE3OX0.5arqrx8Tt7v-hpXpo_ncoK4IX8th9IibxAuv93SSoOU'
         };
         
-        let db;
-        let ROOM_SLUG = '';
+        // Init immediately for auth check
+        const db = supabase.createClient(AUTH.url, AUTH.key);
+        let ROOM_SLUG = 'main-vault-01'; // Fixed room name so data persists even if password changes
         let localClips = [];
 
         // --- AUTH & INIT ---
         const passInput = document.getElementById('pass-input');
         passInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') checkPass(); });
 
-        function checkPass() {
-            if (passInput.value === AUTH.pass) {
-                // Generate a consistent slug based on password so it's always the same room
-                ROOM_SLUG = 'room-' + btoa(AUTH.pass).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
-                document.getElementById('room-id').innerText = ROOM_SLUG;
-                
-                document.getElementById('auth-screen').classList.add('hidden');
-                document.getElementById('app-screen').classList.remove('hidden');
-                document.getElementById('app-screen').classList.add('flex');
-                
-                initSupabase();
-            } else {
+        async function checkPass() {
+            const input = passInput.value;
+            const btn = document.querySelector('button[onclick="checkPass()"]');
+            const originalText = btn.innerHTML;
+            
+            btn.innerText = 'Verifying...';
+            btn.disabled = true;
+
+            try {
+                // Fetch password from DB
+                const { data } = await db.from('clips').select('content').eq('slug', 'config_password').single();
+                const remotePass = data ? data.content : '98891998'; // Fallback if DB row missing
+
+                if (input === remotePass) {
+                    document.getElementById('room-id').innerText = 'Main Vault';
+                    document.getElementById('auth-screen').classList.add('hidden');
+                    document.getElementById('app-screen').classList.remove('hidden');
+                    document.getElementById('app-screen').classList.add('flex');
+                    startSync();
+                } else {
+                    throw new Error('Wrong password');
+                }
+            } catch (e) {
                 const err = document.getElementById('error-msg');
+                err.innerText = 'Incorrect passcode';
                 err.classList.remove('hidden');
                 passInput.classList.add('border-red-500');
                 setTimeout(() => passInput.classList.remove('border-red-500'), 2000);
+                btn.innerText = originalText;
+                btn.disabled = false;
             }
         }
 
-        function initSupabase() {
-            db = supabase.createClient(AUTH.url, AUTH.key);
-            
+        function startSync() {
             // 1. Initial Load
             fetchClips();
 
