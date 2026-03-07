@@ -168,7 +168,29 @@
         }
 
         // --- LOGIC ---
+        async function fetchClips() {
+            try {
+                const { data, error } = await db
+                    .from('clips')
+                    .select('content')
+                    .eq('slug', ROOM_SLUG)
+                    .single();
 
+                if (error && error.code === 'PGRST116') {
+                    // New vault: Initialize with empty array
+                    await db.from('clips').insert([{ slug: ROOM_SLUG, content: '[]' }]);
+                    localClips = [];
+                } else if (data) {
+                    parseAndRender(data.content);
+                } else {
+                    localClips = [];
+                }
+            } catch (err) {
+                console.error("Fetch failed:", err);
+                localClips = [];
+            }
+            renderHistory();
+        }
 
         function parseAndRender(jsonContent) {
             try {
