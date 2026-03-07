@@ -8,73 +8,66 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        /* Smooth tab transition */
-        .tab-content { display: none; animation: fadeIn 0.2s ease-in-out; }
-        .tab-content.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        /* Mobile tweaks */
-        .mobile-height { min-height: calc(100vh - 180px); }
+        body { font-family: 'Inter', sans-serif; background-color: #020617; }
+        .tab-animate { animation: fadeIn 0.15s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        textarea::placeholder { color: #475569; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 h-screen flex flex-col overflow-hidden">
+<body class="bg-slate-950 text-slate-100 h-screen flex flex-col overflow-hidden">
 
     <!-- PASSWORD OVERLAY -->
-    <div id="auth-screen" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6">
+    <div id="auth-screen" class="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6">
         <div class="w-full max-w-sm text-center">
             <div class="mb-6">
-                <div class="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-200">
+                <div class="w-16 h-16 bg-blue-500 rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-blue-900/20">
                     <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                 </div>
-                <h1 class="text-2xl font-bold mt-4 text-gray-900">Sync Space</h1>
-                <p class="text-gray-500 text-sm mt-1">Enter passcode to access your vault</p>
+                <h1 class="text-2xl font-bold mt-4 text-white">Sync Space</h1>
+                <p class="text-slate-400 text-sm mt-1">Vault is encrypted</p>
             </div>
-            <input type="password" id="pass-input" placeholder="Passcode" class="w-full text-center text-2xl tracking-widest p-4 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition-all mb-4">
-            <button onclick="checkPass()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all transform active:scale-95">
-                Unlock
+            <input type="password" id="pass-input" placeholder="••••" class="w-full text-center text-2xl tracking-widest p-4 rounded-xl border-2 border-slate-800 bg-slate-900 text-white focus:border-blue-500 focus:outline-none transition-all mb-4">
+            <button onclick="checkPass()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-4 rounded-xl shadow-lg transition-all transform active:scale-95">
+                Open Vault
             </button>
-            <p id="error-msg" class="text-red-500 text-sm mt-3 hidden">Incorrect passcode</p>
+            <p id="error-msg" class="text-red-400 text-sm mt-3 hidden">Incorrect passcode</p>
         </div>
     </div>
 
-    <!-- MAIN APP (Hidden by default) -->
-    <div id="app-screen" class="hidden flex-col h-full max-w-md mx-auto w-full bg-white shadow-2xl sm:border-x sm:border-gray-200 relative">
+    <!-- MAIN APP -->
+    <div id="app-screen" class="hidden flex-col h-full max-w-md mx-auto w-full bg-slate-900 shadow-2xl sm:border-x sm:border-slate-800 relative">
         
-        <!-- Header -->
-        <header class="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-            <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                Live Sync
+        <header class="bg-slate-900/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-800 px-6 py-4 flex justify-between items-center">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                Live Vault
             </h2>
-            <div class="text-xs text-gray-400 font-mono">ID: <span id="room-id">...</span></div>
+            <div class="text-[10px] text-slate-500 font-mono uppercase tracking-tighter"><span id="room-id">...</span></div>
         </header>
 
-        <!-- Tabs -->
-        <div class="flex p-2 bg-gray-50 mx-4 mt-4 rounded-xl gap-2">
-            <button onclick="switchTab('write')" id="tab-write" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-blue-600 transition-all">
+        <div class="flex p-1.5 bg-slate-950/50 mx-4 mt-4 rounded-xl gap-1 border border-slate-800">
+            <button onclick="switchTab('write')" id="tab-write" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-slate-800 text-white shadow-sm transition-all">
                 Write
             </button>
-            <button onclick="switchTab('read')" id="tab-read" class="flex-1 py-2 text-sm font-semibold rounded-lg text-gray-500 hover:bg-gray-200 transition-all">
-                Fetch History
+            <button onclick="switchTab('read')" id="tab-read" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-400 hover:bg-slate-800/50 transition-all">
+                History
             </button>
         </div>
 
-        <!-- CONTENT AREA -->
         <div class="flex-1 overflow-y-auto p-4 relative">
-            
-            <!-- WRITE TAB -->
-            <div id="view-write" class="tab-content active h-full flex flex-col">
-                <textarea id="input-text" class="flex-1 w-full p-4 text-lg bg-gray-50 rounded-xl border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none resize-none transition-all placeholder-gray-400" placeholder="Paste text, links, or notes here..."></textarea>
+            <div id="view-write" class="tab-animate h-full flex flex-col">
+                <textarea id="input-text" class="flex-1 w-full p-4 text-lg bg-slate-950 rounded-xl border border-slate-800 text-slate-200 focus:border-blue-500/50 outline-none resize-none transition-all" placeholder="Paste text or notes..."></textarea>
                 <div class="mt-4">
-                    <button onclick="sendData()" id="send-btn" class="w-full bg-black text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <button onclick="sendData()" id="send-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform">
                         <span>Send to Vault</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
                     </button>
                 </div>
             </div>
 
-            <!-- READ TAB -->
-            <div id="view-read" class="tab-content pb-20">
+            <div id="view-read" class="tab-animate hidden pb-20">
                 <div class="flex justify-between items-center mb-4 px-2">
                     <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Clips</h3>
                     <button onclick="clearHistory()" class="text-xs text-red-500 hover:text-red-700 font-semibold">Clear All</button>
@@ -90,8 +83,7 @@
         </div>
 
         <!-- Toast Notification -->
-        <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl opacity-0 transition-opacity pointer-events-none text-sm font-medium z-50 flex items-center gap-2">
-            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl opacity-0 transition-all pointer-events-none text-sm font-bold z-50 flex items-center gap-2 translate-y-4">
             <span id="toast-msg">Action Successful</span>
         </div>
 
@@ -242,19 +234,22 @@
 
         // --- UI ---
         function switchTab(tab) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.getElementById(`view-${tab}`).classList.add('active');
-            
+            const viewWrite = document.getElementById('view-write');
+            const viewRead = document.getElementById('view-read');
             const tWrite = document.getElementById('tab-write');
             const tRead = document.getElementById('tab-read');
-            
+
             if (tab === 'write') {
-                tWrite.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-blue-600 transition-all";
-                tRead.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-gray-500 hover:bg-gray-200 transition-all";
+                viewWrite.classList.remove('hidden');
+                viewRead.classList.add('hidden');
+                tWrite.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-slate-800 text-white shadow-sm transition-all";
+                tRead.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-400 hover:bg-slate-800/50 transition-all";
                 document.getElementById('input-text').focus();
             } else {
-                tRead.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-blue-600 transition-all";
-                tWrite.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-gray-500 hover:bg-gray-200 transition-all";
+                viewWrite.classList.add('hidden');
+                viewRead.classList.remove('hidden');
+                tRead.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-slate-800 text-white shadow-sm transition-all";
+                tWrite.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-400 hover:bg-slate-800/50 transition-all";
                 renderHistory();
             }
         }
@@ -264,7 +259,7 @@
             list.innerHTML = '';
 
             if (localClips.length === 0) {
-                list.innerHTML = '<div class="text-center text-gray-400 mt-10"><p>No clips found.</p></div>';
+                list.innerHTML = '<div class="text-center text-slate-500 mt-10"><p>Vault is empty.</p></div>';
                 return;
             }
 
@@ -274,15 +269,16 @@
                 });
                 
                 const el = document.createElement('div');
-                el.className = 'bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group relative';
+                el.className = 'bg-slate-950 rounded-xl border border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all';
                 el.innerHTML = `
-                    <div class="pr-10 text-gray-700 whitespace-pre-wrap font-mono text-sm break-words">${escapeHtml(clip.text)}</div>
-                    <div class="mt-3 flex justify-between items-end border-t border-gray-50 pt-2">
-                        <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">${time}</span>
+                    <div class="p-4 text-slate-300 whitespace-pre-wrap font-mono text-sm break-words select-all">${escapeHtml(clip.text)}</div>
+                    <div class="px-4 py-2 bg-slate-900/50 border-t border-slate-800 flex justify-between items-center">
+                        <span class="text-[10px] text-slate-500 font-bold uppercase">${time}</span>
+                        <button onclick="copyText('${escapeJs(clip.text)}', this)" class="flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 py-1 px-3 rounded-lg bg-blue-500/10 active:scale-95 transition-all">
+                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                             COPY ALL
+                        </button>
                     </div>
-                    <button onclick="copyText('${escapeJs(clip.text)}', this)" class="absolute top-3 right-3 bg-gray-50 p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
-                    </button>
                 `;
                 list.appendChild(el);
             });
