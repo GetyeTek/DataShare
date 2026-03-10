@@ -243,14 +243,20 @@
             }
         }
 
-        async function updateNote(id, note) {
+        async function patchClip(id, column, value) {
             const { error } = await db
                 .from('clips')
-                .update({ annotation: note })
+                .update({ [column]: value })
                 .eq('id', id);
             
-            if (error) showToast('Failed to save note');
-            else console.log('Note saved');
+            if (error) {
+                showToast(`Failed to update ${column}`);
+            } else {
+                // Update local state quietly
+                const index = localClips.findIndex(c => c.id === id);
+                if (index !== -1) localClips[index][column] = value;
+                console.log(`${column} synchronized`);
+            }
         }
 
         // --- UI ---
@@ -293,11 +299,14 @@
                 el.className = 'bg-slate-950 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col transition-all mb-4 w-full';
                 el.innerHTML = `
                     <div class="max-h-80 overflow-y-auto p-4 bg-slate-950 border-b border-slate-900/50">
-                        <pre class="text-blue-300 whitespace-pre-wrap font-mono text-xs sm:text-sm break-all select-all">${escapeHtml(clip.content)}</pre>
+                        <textarea 
+                            onblur="patchClip('${clip.id}', 'content', this.value)"
+                            class="w-full bg-transparent text-blue-300 whitespace-pre-wrap font-mono text-xs sm:text-sm break-all outline-none resize-none focus:text-white transition-colors"
+                            rows="${clip.content.split('\n').length || 1}">${escapeHtml(clip.content)}</textarea>
                     </div>
                     <div class="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
                         <textarea 
-                            onblur="updateNote('${clip.id}', this.value)"
+                            onblur="patchClip('${clip.id}', 'annotation', this.value)"
                             placeholder="Add a note or label..."
                             class="w-full bg-transparent text-[11px] text-slate-400 italic outline-none resize-none placeholder:text-slate-700 focus:text-blue-200 transition-colors"
                             rows="1">${escapeHtml(clip.annotation || '')}</textarea>
