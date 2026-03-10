@@ -160,6 +160,7 @@
                         fetchClips();
                         if (payload.eventType === 'INSERT') showToast('New clip added');
                         if (payload.eventType === 'DELETE') showToast('Clip removed');
+                        if (payload.eventType === 'UPDATE') fetchClips();
                     }
                 )
                 .subscribe();
@@ -242,6 +243,16 @@
             }
         }
 
+        async function updateNote(id, note) {
+            const { error } = await db
+                .from('clips')
+                .update({ annotation: note })
+                .eq('id', id);
+            
+            if (error) showToast('Failed to save note');
+            else console.log('Note saved');
+        }
+
         // --- UI ---
         function switchTab(tab) {
             const viewWrite = document.getElementById('view-write');
@@ -283,6 +294,13 @@
                 el.innerHTML = `
                     <div class="max-h-80 overflow-y-auto p-4 bg-slate-950 border-b border-slate-900/50">
                         <pre class="text-blue-300 whitespace-pre-wrap font-mono text-xs sm:text-sm break-all select-all">${escapeHtml(clip.content)}</pre>
+                    </div>
+                    <div class="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
+                        <textarea 
+                            onblur="updateNote('${clip.id}', this.value)"
+                            placeholder="Add a note or label..."
+                            class="w-full bg-transparent text-[11px] text-slate-400 italic outline-none resize-none placeholder:text-slate-700 focus:text-blue-200 transition-colors"
+                            rows="1">${escapeHtml(clip.annotation || '')}</textarea>
                     </div>
                     <div class="px-4 py-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center shrink-0">
                         <div class="flex items-center gap-3">
