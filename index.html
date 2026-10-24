@@ -159,6 +159,34 @@
             if (preview) preview.classList.add('hidden');
         }
 
+        function uploadFileDirect(storagePath, file) {
+            return new Promise((resolve, reject) => {
+                const uploadUrl = `${AUTH.url}/storage/v1/object/${STORAGE_BUCKET}/${storagePath}`;
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', uploadUrl, true);
+                xhr.setRequestHeader('apikey', AUTH.key);
+                xhr.setRequestHeader('Authorization', `Bearer ${AUTH.key}`);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+                xhr.setRequestHeader('x-upsert', 'true');
+
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        const publicUrl = `${AUTH.url}/storage/v1/object/public/${STORAGE_BUCKET}/${storagePath}`;
+                        resolve(publicUrl);
+                    } else {
+                        try {
+                            const err = JSON.parse(xhr.responseText);
+                            reject(new Error(err.message || err.error || `Upload failed (${xhr.status})`));
+                        } catch {
+                            reject(new Error(`Upload failed (${xhr.status})`));
+                        }
+                    }
+                };
+                xhr.onerror = () => reject(new Error('Network error during file upload'));
+                xhr.send(file);
+            });
+        }
+
         // --- AUTH & INIT ---
         const passInput = document.getElementById('pass-input');
         passInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') checkPass(); });
@@ -185,11 +213,13 @@
             btn.disabled = true;
 
             try {
-                // Fetch password from DB
-                const { data } = await db.from('clips').select('content').eq('slug', 'config_password').single();
-                const remotePass = data ? data.content : '98891998'; // Fallback if DB row missing
+                // Fetch password strictly from DB
+                const { data, error } = await db.from('clips').select('content').eq('slug', 'config_password').single();
+                if (error || !data || !data.content) {
+                    throw new Error('Vault password not configured in database');
+                }
 
-                if (input === remotePass) {
+                if (input === data.content) {
                     document.getElementById('room-id').innerText = 'Main Vault';
                     document.getElementById('auth-screen').classList.add('hidden');
                     document.getElementById('app-screen').classList.remove('hidden');
@@ -280,15 +310,7 @@
                     const cleanName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
                     const storagePath = `${Date.now()}_${cleanName}`;
 
-                    const { error: uploadError } = await db.storage
-                        .from(STORAGE_BUCKET)
-                        .upload(storagePath, selectedFile);
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = db.storage
-                        .from(STORAGE_BUCKET)
-                        .getPublicUrl(storagePath);
+                    const publicUrl = await uploadFileDirect(storagePath, selectedFile);
 
                     const isImg = selectedFile.type.startsWith('image/');
                     clipRow = {
