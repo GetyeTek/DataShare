@@ -89,6 +89,16 @@
             </div>
 
             <div id="view-read" class="tab-animate hidden pb-20">
+                <!-- Pinned Hub -->
+                <div id="pinned-section" class="hidden mb-6">
+                    <div class="flex items-center gap-2 mb-3 px-2">
+                        <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                        <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider">Pinned Hub</h3>
+                        <span id="pinned-count" class="text-[10px] bg-amber-400/10 text-amber-400 font-mono px-1.5 py-0.5 rounded-full font-bold">0</span>
+                    </div>
+                    <div id="pinned-list" class="space-y-3"></div>
+                </div>
+
                 <div class="flex justify-between items-center mb-4 px-2">
                     <div class="flex items-center gap-3">
                         <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Recent Clips</h3>
@@ -366,6 +376,29 @@
             }
         }
 
+        async function togglePin(id, currentStatus) {
+            const newStatus = !currentStatus;
+            const index = localClips.findIndex(c => c.id === id);
+            if (index !== -1) {
+                localClips[index].is_pinned = newStatus;
+                renderHistory();
+            }
+            showToast(newStatus ? 'Pinned to Hub' : 'Unpinned');
+
+            const { error } = await db
+                .from('clips')
+                .update({ is_pinned: newStatus })
+                .eq('id', id);
+
+            if (error) {
+                showToast('Failed to update pin');
+                if (index !== -1) {
+                    localClips[index].is_pinned = currentStatus;
+                    renderHistory();
+                }
+            }
+        }
+
         async function patchClip(id, column, value) {
             const { error } = await db
                 .from('clips')
@@ -405,95 +438,129 @@
         }
 
         function renderHistory() {
-            const list = document.getElementById('history-list');
-            list.innerHTML = '';
+            const pinnedSection = document.getElementById('pinned-section');
+            const pinnedList = document.getElementById('pinned-list');
+            const pinnedCount = document.getElementById('pinned-count');
+            const recentList = document.getElementById('history-list');
+
+            pinnedList.innerHTML = '';
+            recentList.innerHTML = '';
 
             if (localClips.length === 0) {
-                list.innerHTML = '<div class="text-center text-slate-500 mt-10"><p>Vault is empty.</p></div>';
+                pinnedSection.classList.add('hidden');
+                recentList.innerHTML = '<div class="text-center text-slate-500 mt-10"><p>Vault is empty.</p></div>';
                 return;
             }
 
-            localClips.forEach(clip => {
-                const time = new Date(clip.created_at).toLocaleString(undefined, {
-                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            const pinnedClips = localClips.filter(c => Boolean(c.is_pinned));
+            const recentClips = localClips.filter(c => !Boolean(c.is_pinned));
+
+            if (pinnedClips.length > 0) {
+                pinnedSection.classList.remove('hidden');
+                pinnedCount.innerText = pinnedClips.length;
+                pinnedClips.forEach(clip => {
+                    pinnedList.appendChild(buildClipCard(clip, true));
                 });
+            } else {
+                pinnedSection.classList.add('hidden');
+            }
 
-                let contentHtml = '';
-                const isFile = clip.type === 'file';
-                const isImage = clip.type === 'image';
-                const hasFile = isFile || isImage;
+            if (recentClips.length === 0) {
+                recentList.innerHTML = '<div class="text-center text-slate-500 mt-6"><p>No recent clips.</p></div>';
+            } else {
+                recentClips.forEach(clip => {
+                    recentList.appendChild(buildClipCard(clip, false));
+                });
+            }
+        }
 
-                if (isImage) {
-                    contentHtml = `
-                        <div class="p-3 bg-slate-950 border-b border-slate-900/50 flex flex-col gap-2">
-                            <a href="${escapeHtml(clip.file_url)}" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-lg bg-slate-900 border border-slate-800">
-                                <img src="${escapeHtml(clip.file_url)}" alt="${escapeHtml(clip.file_name || 'image')}" class="w-full max-h-56 object-contain hover:scale-[1.01] transition-transform" />
-                            </a>
-                            <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
-                                <span class="truncate max-w-[200px] text-slate-300 font-semibold">${escapeHtml(clip.file_name || 'Image')}</span>
-                                <span>${formatBytes(clip.file_size)}</span>
-                            </div>
-                            ${clip.content && clip.content !== clip.file_name ? `<p class="text-xs text-slate-300 px-1 whitespace-pre-wrap">${escapeHtml(clip.content)}</p>` : ''}
-                        </div>
-                    `;
-                } else if (isFile) {
-                    contentHtml = `
-                        <div class="p-4 bg-slate-950 border-b border-slate-900/50 flex flex-col gap-3">
-                            <div class="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
-                                <div class="p-3 bg-blue-500/10 text-blue-400 rounded-lg shrink-0">
-                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                </div>
-                                <div class="overflow-hidden flex-1">
-                                    <p class="text-sm font-semibold text-slate-200 truncate">${escapeHtml(clip.file_name || 'File')}</p>
-                                    <p class="text-[11px] text-slate-400 font-mono mt-0.5">${formatBytes(clip.file_size)}</p>
-                                </div>
-                                <a href="${escapeHtml(clip.file_url)}" download="${escapeHtml(clip.file_name || 'file')}" target="_blank" class="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shrink-0" title="Download">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                </a>
-                            </div>
-                            ${clip.content && clip.content !== clip.file_name ? `<p class="text-xs text-slate-300 px-1 whitespace-pre-wrap">${escapeHtml(clip.content)}</p>` : ''}
-                        </div>
-                    `;
-                } else {
-                    contentHtml = `
-                        <div class="h-44 p-4 bg-slate-950 border-b border-slate-900/50">
-                            <textarea 
-                                onblur="patchClip('${clip.id}', 'content', this.value)"
-                                class="w-full h-full bg-transparent text-blue-300 whitespace-pre-wrap font-mono text-xs sm:text-sm break-all break-words outline-none resize-none focus:text-white transition-colors overflow-y-auto"
-                                >${escapeHtml(clip.content)}</textarea>
-                        </div>
-                    `;
-                }
+        function buildClipCard(clip, isPinned) {
+            const time = new Date(clip.created_at).toLocaleString(undefined, {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
 
-                const el = document.createElement('div');
-                el.className = 'bg-slate-950 rounded-xl border border-slate-800 shadow-xl overflow-hidden flex flex-col transition-all mb-4 w-full';
-                el.innerHTML = `
-                    ${contentHtml}
-                    <div class="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
-                        <textarea 
-                            onblur="patchClip('${clip.id}', 'annotation', this.value)"
-                            placeholder="Add a note or label..."
-                            class="w-full bg-transparent text-[11px] text-slate-400 italic outline-none resize-none placeholder:text-slate-700 focus:text-blue-200 transition-colors"
-                            rows="1">${escapeHtml(clip.annotation || '')}</textarea>
-                    </div>
-                    <div class="px-4 py-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center shrink-0">
-                        <div class="flex items-center gap-3">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Recorded</span>
-                                <span class="text-[10px] text-slate-400 font-medium">${time}</span>
-                            </div>
-                            <button onclick="deleteClip('${clip.id}', '${clip.storage_path || ''}')" class="p-2 text-slate-600 hover:text-red-500 transition-colors" title="Delete entry">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                            </button>
+            let contentHtml = '';
+            const isFile = clip.type === 'file';
+            const isImage = clip.type === 'image';
+            const hasFile = isFile || isImage;
+
+            if (isImage) {
+                contentHtml = `
+                    <div class="p-3 bg-slate-950 border-b border-slate-900/50 flex flex-col gap-2">
+                        <a href="${escapeHtml(clip.file_url)}" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-lg bg-slate-900 border border-slate-800">
+                            <img src="${escapeHtml(clip.file_url)}" alt="${escapeHtml(clip.file_name || 'image')}" class="w-full max-h-56 object-contain hover:scale-[1.01] transition-transform" />
+                        </a>
+                        <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
+                            <span class="truncate max-w-[200px] text-slate-300 font-semibold">${escapeHtml(clip.file_name || 'Image')}</span>
+                            <span>${formatBytes(clip.file_size)}</span>
                         </div>
-                        <button onclick="copyText('${clip.id}', this)" class="flex items-center gap-2 text-[10px] font-black text-white py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-900/20">
-                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></svg>
-                             ${hasFile ? 'COPY LINK' : 'COPY'}
-                        </button>
+                        ${clip.content && clip.content !== clip.file_name ? `<p class="text-xs text-slate-300 px-1 whitespace-pre-wrap">${escapeHtml(clip.content)}</p>` : ''}
                     </div>
                 `;
-                list.appendChild(el);
-            });
+            } else if (isFile) {
+                contentHtml = `
+                    <div class="p-4 bg-slate-950 border-b border-slate-900/50 flex flex-col gap-3">
+                        <div class="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+                            <div class="p-3 bg-blue-500/10 text-blue-400 rounded-lg shrink-0">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            </div>
+                            <div class="overflow-hidden flex-1">
+                                <p class="text-sm font-semibold text-slate-200 truncate">${escapeHtml(clip.file_name || 'File')}</p>
+                                <p class="text-[11px] text-slate-400 font-mono mt-0.5">${formatBytes(clip.file_size)}</p>
+                            </div>
+                            <a href="${escapeHtml(clip.file_url)}" download="${escapeHtml(clip.file_name || 'file')}" target="_blank" class="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shrink-0" title="Download">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            </a>
+                        </div>
+                        ${clip.content && clip.content !== clip.file_name ? `<p class="text-xs text-slate-300 px-1 whitespace-pre-wrap">${escapeHtml(clip.content)}</p>` : ''}
+                    </div>
+                `;
+            } else {
+                contentHtml = `
+                    <div class="h-44 p-4 bg-slate-950 border-b border-slate-900/50">
+                        <textarea 
+                            onblur="patchClip('${clip.id}', 'content', this.value)"
+                            class="w-full h-full bg-transparent text-blue-300 whitespace-pre-wrap font-mono text-xs sm:text-sm break-all break-words outline-none resize-none focus:text-white transition-colors overflow-y-auto"
+                            >${escapeHtml(clip.content)}</textarea>
+                    </div>
+                `;
+            }
+
+            const borderClass = isPinned 
+                ? 'border-amber-500/40 shadow-amber-950/20 ring-1 ring-amber-500/20' 
+                : 'border-slate-800 shadow-xl';
+
+            const el = document.createElement('div');
+            el.className = `bg-slate-950 rounded-xl border ${borderClass} overflow-hidden flex flex-col transition-all mb-4 w-full`;
+            el.innerHTML = `
+                ${contentHtml}
+                <div class="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
+                    <textarea 
+                        onblur="patchClip('${clip.id}', 'annotation', this.value)"
+                        placeholder="Add a note or label..."
+                        class="w-full bg-transparent text-[11px] text-slate-400 italic outline-none resize-none placeholder:text-slate-700 focus:text-blue-200 transition-colors"
+                        rows="1">${escapeHtml(clip.annotation || '')}</textarea>
+                </div>
+                <div class="px-4 py-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center shrink-0">
+                    <div class="flex items-center gap-2">
+                        <div class="flex flex-col">
+                            <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Recorded</span>
+                            <span class="text-[10px] text-slate-400 font-medium">${time}</span>
+                        </div>
+                        <button onclick="togglePin('${clip.id}', ${Boolean(clip.is_pinned)})" class="p-1.5 ${clip.is_pinned ? 'text-amber-400 hover:text-amber-300 bg-amber-400/10' : 'text-slate-500 hover:text-amber-400'} rounded-lg transition-colors ml-1" title="${clip.is_pinned ? 'Unpin from Hub' : 'Pin to Hub'}">
+                            <svg class="w-4 h-4" fill="${clip.is_pinned ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                        </button>
+                        <button onclick="deleteClip('${clip.id}', '${clip.storage_path || ''}')" class="p-1.5 text-slate-600 hover:text-red-500 rounded-lg transition-colors" title="Delete entry">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                    <button onclick="copyText('${clip.id}', this)" class="flex items-center gap-2 text-[10px] font-black text-white py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-900/20">
+                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></svg>
+                         ${hasFile ? 'COPY LINK' : 'COPY'}
+                    </button>
+                </div>
+            `;
+            return el;
         }
 
         function copyText(id, btn) {
